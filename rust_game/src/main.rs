@@ -1,0 +1,151 @@
+#[allow(dead_code)]
+mod util {
+    pub mod event;
+    pub mod shapes;
+}
+
+use std::io;
+use std::time::Duration;
+
+use termion::event::Key;
+use termion::input::MouseTerminal;
+use termion::raw::IntoRawMode;
+use termion::screen::AlternateScreen;
+use tui::backend::TermionBackend;
+use tui::layout::{Constraint, Direction, Layout, Rect};
+use tui::style::Color;
+use tui::widgets::canvas::{Canvas, Map, MapResolution};
+use tui::widgets::{Block, Borders, Widget};
+use tui::Terminal;
+use crate::util::shapes::Cricle;
+
+use crate::util::event::{Config, Event, Events};
+
+struct App {
+    x: f64,
+    y: f64,
+    ball: Rect,
+    playground: Rect,
+    vx: u16,
+    vy: u16,
+    dir_x: bool,
+    dir_y: bool,
+}
+
+impl App {
+    fn new() -> App {
+        App {
+            x: 0.0,
+            y: 0.0,
+            ball: Rect::new(10, 30, 10, 10),
+            playground: Rect::new(10, 10, 100, 100),
+            vx: 1,
+            vy: 1,
+            dir_x: true,
+            dir_y: true,
+        }
+    }
+
+    fn update(&mut self) {
+        if self.ball.left() < self.playground.left() || self.ball.right() > self.playground.right()
+        {
+            self.dir_x = !self.dir_x;
+        }
+        if self.ball.top() < self.playground.top() || self.ball.bottom() > self.playground.bottom()
+        {
+            self.dir_y = !self.dir_y;
+        }
+
+        if self.dir_x {
+            self.ball.x += self.vx;
+        } else {
+            self.ball.x -= self.vx;
+        }
+
+        if self.dir_y {
+            self.ball.y += self.vy;
+        } else {
+            self.ball.y -= self.vy
+        }
+    }
+}
+
+fn main() -> Result<(), failure::Error> {
+    // Terminal initialization
+    let stdout = io::stdout().into_raw_mode()?;
+    let stdout = MouseTerminal::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.hide_cursor()?;
+
+    // Setup event handlers
+    let config = Config {
+        tick_rate: Duration::from_millis(60),
+        ..Default::default()
+    };
+    let events = Events::with_config(config);
+
+    // App
+    let mut app = App::new();
+
+    loop {
+        terminal.draw(|mut f| {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .split(f.size());
+            Canvas::default()
+                .block(Block::default().borders(Borders::ALL).title("World"))
+                .paint(|ctx| {
+                    ctx.draw(&Map {
+                        color: Color::White,
+                        resolution: MapResolution::High,
+                    });
+                    ctx.print(app.x, -app.y, "You are here", Color::Yellow);
+                })
+                .x_bounds([-180.0, 180.0])
+                .y_bounds([-90.0, 90.0])
+                .render(&mut f, chunks[0]);
+            Canvas::default()
+                .block(Block::default().borders(Borders::ALL).title("Pong"))
+                .paint(|ctx| {
+                    ctx.draw(&Cricle {
+                        radius: (app.ball.width/2).into(),
+                        center: ((app.ball.x + app.ball.width/2).into(), (app.ball.y + app.ball.height/2).into()),
+                        color: Color::Red,
+                    });
+                })
+                .x_bounds([10.0, 110.0])
+                .y_bounds([10.0, 110.0])
+                .render(&mut f, chunks[1]);
+        })?;
+
+        match events.next()? {
+            Event::Input(input) => match input {
+                Key::Char('q') => {
+                    break;
+                }
+                Key::Down => {
+                    app.y += 1.0;
+                }
+                Key::Up => {
+                    app.y -= 1.0;
+                }
+                Key::Right => {
+                    app.x += 1.0;
+                }
+                Key::Left => {
+                    app.x -= 1.0;
+                }
+
+                _ => {}
+            },
+            Event::Tick => {
+                app.update();
+            }
+        }
+    }
+
+    Ok(())
+}

@@ -1,0 +1,20 @@
+[package]
+name = "rust_test_parallel"
+version = "0.1.0"
+authors = ["Wolfgang Reithmeier <wolfgang.reithmeier@bmw.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.7.3"
+#rayon = "1.3.0"
+futures = "0.3.4"
+async-std = { version = "1.5.0" ,features = ["attributes"] }
+crossbeam = "0.7.3"
+
+[profile.release]
+panic = 'abort'
+codegen-units = 1
+lto = true
+opt-level = 'z'  # Optimize for size.
